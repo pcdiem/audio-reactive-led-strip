@@ -3,7 +3,7 @@ from __future__ import print_function
 from __future__ import division
 import os
 
-DEVICE = 'esp8266'
+DEVICE = 'tasmota_dgr'
 #DEVICE = 'pi'
 """Device used to control LED strip. Must be 'pi',  'esp8266' or 'blinkstick'
 
@@ -15,6 +15,9 @@ audio input and control the LED strip directly.
 
 'blinkstick' means that a BlinkstickPro is connected to this PC which will be used
 to control the leds connected to it.
+
+'tasmota_dgr' means that you are using a device running Tasmota Device Groups to
+control the RGB light values.
 """
 
 if DEVICE == 'esp8266':
@@ -43,13 +46,23 @@ if DEVICE == 'blinkstick':
     SOFTWARE_GAMMA_CORRECTION = True
     """Set to True because blinkstick doesn't use hardware dithering"""
 
+if DEVICE == 'tasmota_dgr':
+    DEVICE_GROUP = 'TestLights'
+    """Tasmota device group"""
+    UDP_IP = '239.255.250.250'
+    """Tasmota device group multicast address (DEVICE_GROUPS_ADDRESS)"""
+    UDP_PORT = 4447
+    """Tasmota device group multicast port (DEVICE_GROUPS_PORT)"""
+    SOFTWARE_GAMMA_CORRECTION = False
+    """Set to False because the firmware handles gamma correction + dither"""
+
 USE_GUI = True
 """Whether or not to display a PyQtGraph GUI plot of visualization"""
 
-DISPLAY_FPS = True
+DISPLAY_FPS = False
 """Whether to display the FPS when running (can reduce performance)"""
 
-N_PIXELS = 60
+N_PIXELS = 6
 """Number of pixels in the LED strip (must match ESP8266 firmware)"""
 
 GAMMA_TABLE_PATH = os.path.join(os.path.dirname(__file__), 'gamma_table.npy')
@@ -80,10 +93,10 @@ assert FPS <= _max_led_FPS, 'FPS must be <= {}'.format(_max_led_FPS)
 MIN_FREQUENCY = 200
 """Frequencies below this value will be removed during audio processing"""
 
-MAX_FREQUENCY = 12000
+MAX_FREQUENCY = 10000
 """Frequencies above this value will be removed during audio processing"""
 
-N_FFT_BINS = 24
+N_FFT_BINS = 3
 """Number of frequency bins to use when transforming audio to frequency domain
 
 Fast Fourier transforms are used to transform time-domain audio data to the
@@ -101,5 +114,5 @@ There is no point using more bins than there are pixels on the LED strip.
 N_ROLLING_HISTORY = 2
 """Number of past audio frames to include in the rolling window"""
 
-MIN_VOLUME_THRESHOLD = 1e-7
+MIN_VOLUME_THRESHOLD = .005
 """No music visualization displayed if recorded audio volume below threshold"""

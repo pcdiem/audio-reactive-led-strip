@@ -47,3 +47,5 @@ Temporary Items
 .apdisk
 *.pyc
 *.pdf
+.vscode/settings.json
+.gitignore

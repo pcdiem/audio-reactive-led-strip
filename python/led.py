@@ -30,6 +30,10 @@ elif config.DEVICE == 'blinkstick':
     # Create a listener that turns the leds off when the program terminates
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
+# Tasmota device groups uses WiFi communication
+if config.DEVICE == "tasmota_dgr":
+    import socket
+    _sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 _gamma = np.load(config.GAMMA_TABLE_PATH)
 """Gamma lookup table used for nonlinear brightness correction"""
@@ -39,6 +43,8 @@ _prev_pixels = np.tile(253, (3, config.N_PIXELS))
 
 pixels = np.tile(1, (3, config.N_PIXELS))
 """Pixel values for the LED strip"""
+
+dgr_sequence = 0
 
 _is_python_2 = int(platform.python_version_tuple()[0]) == 2
 
@@ -136,6 +142,44 @@ def _update_blinkstick():
     stick.set_led_data(0, newstrip)
 
 
+def _update_tasmota_dgr():
+    """Sends Device Group packets to a device running Tasmota to update RGB
+    light values.
+    """
+    global pixels, _prev_pixels, dgr_sequence
+    # Accentuate the colors that are higher than the average
+    avg = (pixels[0][0] + pixels[1][0] + pixels[2][0]) / 3
+    pixels[0][0] = pixels[0][0] * 2 if pixels[0][0] > avg else pixels[0][0] / 2
+    pixels[1][0] = pixels[1][0] * 2 if pixels[1][0] > avg else pixels[1][0] / 2
+    pixels[2][0] = pixels[2][0] * 2 if pixels[2][0] > avg else pixels[2][0] / 2
+    # Truncate values and cast to integer
+    pixels = np.clip(pixels, 0, 255).astype(int)
+    # Optionally apply gamma correction
+    p = _gamma[pixels] if config.SOFTWARE_GAMMA_CORRECTION else np.copy(pixels)
+    if not np.array_equal(p[:, 0], _prev_pixels[:, 0]):
+        dgr_sequence += 1
+        if (dgr_sequence == 0):
+            dgr_sequence = 1
+        m = bytearray()
+        m.extend(('TASMOTA_DGR' + config.DEVICE_GROUP).encode('latin-1'))
+        m.append(0)
+        m.append(dgr_sequence & 0xff)  # Packet sequence 1
+        m.append(dgr_sequence >> 8)  # Packet sequence 2
+        m.append(16 + 32)  # Flags 1 (DGR_FLAG_MORE_TO_COME, DGR_FLAG_DIRECT)
+        m.append(0)  # Flags 2
+        m.append(224)  # Item code (Light Channels)
+        m.append(6)  # Item length
+        m.append(p[2][0])  # Pixel red value
+        m.append(p[1][0])  # Pixel green value
+        m.append(p[0][0])  # Pixel blue value
+        m.append(0)  # Pixel cold white
+        m.append(0)  # Pixel warm white
+        m.append(0)  # Pixel extra
+        m.append(0)  # Item code (EOL)
+        _sock.sendto(m, (config.UDP_IP, config.UDP_PORT))
+        _prev_pixels = np.copy(p)
+
+
 def update():
     """Updates the LED strip values"""
     if config.DEVICE == 'esp8266':
@@ -144,6 +188,8 @@ def update():
         _update_pi()
     elif config.DEVICE == 'blinkstick':
         _update_blinkstick()
+    elif config.DEVICE == 'tasmota_dgr':
+        _update_tasmota_dgr()
     else:
         raise ValueError('Invalid device selected')
 
